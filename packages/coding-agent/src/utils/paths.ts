@@ -21,6 +21,7 @@ export function canonicalizePath(path: string): string {
  * or a URL protocol. Bare names and relative paths without ./ prefix
  * are considered local.
  */
+
 export function isLocalPath(value: string): boolean {
 	const trimmed = value.trim();
 	// Known non-local prefixes
@@ -35,6 +36,47 @@ export function isLocalPath(value: string): boolean {
 		return false;
 	}
 	return true;
+}
+
+/** Windows absolute path patterns: C:\... C:/... */
+export const WIN_DRIVE_ABS = /^[a-zA-Z]:[\\/]/;
+/** UNC path: \\server\share\... */
+export const WIN_UNC = /^[\\/]{2}[^\\/]+[\\/][^\\/]/;
+/** Device path: \\?\... \\.\... */
+export const WIN_DEVICE = /^[\\/]{2}[?.][\\/]/;
+
+/**
+ * Normalize a POSIX-style Windows absolute path to proper Windows format.
+ * Converts both colon form (/C:/Users/...) and MSYS no-colon form (/c/Users/...).
+ * Multi-letter paths like /tmp, /usr, /home are never converted.
+ * Non-matching paths are returned unchanged.
+ */
+export function normalizeWindowsDrivePath(p: string): string {
+	if (process.platform !== "win32") {
+		return p;
+	}
+
+	// /C:/Users/foo → C:/Users/foo (colon form, unambiguous)
+	const withColon = p.match(/^\/([a-zA-Z]):(?=[\\/]|$)/);
+	if (withColon) {
+		return p.replace(/^\/([a-zA-Z]):(?=[\\/]|$)/, "$1:");
+	}
+
+	// /c/Users/foo → C:\Users\foo (MSYS no-colon form)
+	// Only single-letter top-level directories — /tmp, /usr, /home never match.
+	const msys = p.match(/^\/([a-zA-Z])(?:\/(.*)|$)$/);
+	if (msys) {
+		const drive = msys[1].toUpperCase();
+		const rest = msys[2] ?? "";
+		return rest ? `${drive}:\\${rest.replaceAll("/", "\\")}` : `${drive}:\\`;
+	}
+
+	return p;
+}
+
+/** Returns true for fully-qualified Windows absolute paths (drive, UNC, device). */
+export function isFullyQualifiedWindowsPath(p: string): boolean {
+	return WIN_DRIVE_ABS.test(p) || WIN_UNC.test(p) || WIN_DEVICE.test(p);
 }
 
 function resolveAgainstCwd(filePath: string, cwd: string): string {

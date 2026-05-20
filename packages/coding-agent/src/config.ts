@@ -2,6 +2,7 @@ import { accessSync, constants, existsSync, readFileSync, realpathSync } from "f
 import { homedir } from "os";
 import { basename, dirname, join, resolve, sep, win32 } from "path";
 import { fileURLToPath } from "url";
+import { normalizeWindowsDrivePath } from "./utils/paths.ts";
 import { spawnProcessSync } from "./utils/child-process.ts";
 
 // =============================================================================
@@ -332,7 +333,7 @@ export function getPackageDir(): string {
 	if (envDir) {
 		if (envDir === "~") return homedir();
 		if (envDir.startsWith("~/")) return homedir() + envDir.slice(1);
-		return envDir;
+		return normalizeWindowsDrivePath(envDir);
 	}
 
 	if (isBunBinary) {
@@ -475,7 +476,7 @@ export function getShareViewerUrl(gistId: string): string {
 export function getAgentDir(): string {
 	const envDir = process.env[ENV_AGENT_DIR];
 	if (envDir) {
-		return expandTildePath(envDir);
+		return normalizeWindowsDrivePath(expandTildePath(envDir));
 	}
 	return join(homedir(), CONFIG_DIR_NAME, "agent");
 }

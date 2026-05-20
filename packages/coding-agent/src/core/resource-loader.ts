@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { isAbsolute, join, normalize, resolve, sep } from "node:path";
 import chalk from "chalk";
 import { CONFIG_DIR_NAME } from "../config.ts";
 import { loadThemeFromPath, type Theme } from "../modes/interactive/theme/theme.ts";
@@ -8,7 +8,12 @@ import type { ResourceDiagnostic } from "./diagnostics.ts";
 
 export type { ResourceCollision, ResourceDiagnostic } from "./diagnostics.ts";
 
-import { canonicalizePath, isLocalPath } from "../utils/paths.ts";
+import {
+	canonicalizePath,
+	isFullyQualifiedWindowsPath,
+	isLocalPath,
+	normalizeWindowsDrivePath,
+} from "../utils/paths.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
 import { createExtensionRuntime, loadExtensionFromFactory, loadExtensions } from "./extensions/loader.ts";
 import type { Extension, ExtensionFactory, ExtensionRuntime, LoadExtensionsResult } from "./extensions/types.ts";
@@ -683,6 +688,14 @@ export class DefaultResourceLoader implements ResourceLoader {
 		} else if (trimmed.startsWith("~")) {
 			expanded = join(homedir(), trimmed.slice(1));
 		}
+		if (process.platform === "win32") {
+			expanded = normalizeWindowsDrivePath(expanded);
+			if (isFullyQualifiedWindowsPath(expanded)) {
+				return normalize(expanded);
+			}
+		} else if (isAbsolute(expanded)) {
+			return normalize(expanded);
+		}
 		return resolve(this.cwd, expanded);
 	}
 
@@ -704,7 +717,13 @@ export class DefaultResourceLoader implements ResourceLoader {
 		}
 
 		for (const p of paths) {
-			const resolved = resolve(this.cwd, p);
+			let resolved: string;
+			if (process.platform === "win32") {
+				const wp = normalizeWindowsDrivePath(p.trim());
+				resolved = isFullyQualifiedWindowsPath(wp) ? normalize(wp) : resolve(this.cwd, wp);
+			} else {
+				resolved = resolve(this.cwd, p);
+			}
 			if (!existsSync(resolved)) {
 				diagnostics.push({ type: "warning", message: "theme path does not exist", path: resolved });
 				continue;

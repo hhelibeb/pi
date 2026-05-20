@@ -10,6 +10,7 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import type { Skill } from "../src/core/skills.ts";
 import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
+import { isFullyQualifiedWindowsPath, normalizeWindowsDrivePath } from "../src/utils/paths.ts";
 
 describe("DefaultResourceLoader", () => {
 	let tempDir: string;
@@ -486,6 +487,127 @@ Content`,
 			await loader.reload();
 
 			expect(loader.getSystemPrompt()).toBe("Custom system prompt");
+		});
+	});
+
+	describe("windows path resolution", () => {
+		describe("normalizeWindowsDrivePath", () => {
+			it.skipIf(process.platform !== "win32")("should convert /C:/Users/... to C:/Users/...", () => {
+				expect(normalizeWindowsDrivePath("/C:/Users/alice/.pi/skills/foo")).toBe("C:/Users/alice/.pi/skills/foo");
+			});
+
+			it.skipIf(process.platform !== "win32")("should convert lowercase /z:/... to z:/...", () => {
+				expect(normalizeWindowsDrivePath("/z:/path/to/file")).toBe("z:/path/to/file");
+			});
+
+			it.skipIf(process.platform !== "win32")("should convert /a/b to A:\b on Windows (MSYS semantics)", () => {
+				expect(normalizeWindowsDrivePath("/a/b")).toBe("A:\\b");
+			});
+
+			it.skipIf(process.platform !== "win32")("should convert /C/Users/foo to C:\Users\foo (MSYS no-colon)", () => {
+				expect(normalizeWindowsDrivePath("/C/Users/foo")).toBe("C:\\Users\\foo");
+			});
+
+			it.skipIf(process.platform !== "win32")("should convert MSYS-style /c/Users/foo to C:\Users\foo", () => {
+				expect(normalizeWindowsDrivePath("/c/Users/foo")).toBe("C:\\Users\\foo");
+			});
+
+			it("should NOT convert multi-letter paths like /tmp/pi", () => {
+				expect(normalizeWindowsDrivePath("/tmp/pi")).toBe("/tmp/pi");
+				expect(normalizeWindowsDrivePath("/usr/local/bin")).toBe("/usr/local/bin");
+				expect(normalizeWindowsDrivePath("/home/user")).toBe("/home/user");
+			});
+
+			it("should return unchanged for already-normal Windows paths", () => {
+				expect(normalizeWindowsDrivePath("C:/Users/foo")).toBe("C:/Users/foo");
+				expect(normalizeWindowsDrivePath("C:\\Users\\foo")).toBe("C:\\Users\\foo");
+			});
+
+			it("should return unchanged for non-Windows paths", () => {
+				expect(normalizeWindowsDrivePath("/usr/local/bin")).toBe("/usr/local/bin");
+				expect(normalizeWindowsDrivePath("relative/path")).toBe("relative/path");
+			});
+
+			it("should handle empty string", () => {
+				expect(normalizeWindowsDrivePath("")).toBe("");
+			});
+
+			it.skipIf(process.platform === "win32")(
+				"does not rewrite paths on non-Windows platforms",
+				() => {
+					expect(normalizeWindowsDrivePath("/C:/Users/foo")).toBe("/C:/Users/foo");
+					expect(normalizeWindowsDrivePath("/c/Users/foo")).toBe("/c/Users/foo");
+					expect(normalizeWindowsDrivePath("/a/b")).toBe("/a/b");
+					expect(normalizeWindowsDrivePath("/tmp/pi")).toBe("/tmp/pi");
+				},
+			);
+		});
+
+		describe("isFullyQualifiedWindowsPath", () => {
+			it("should detect drive-letter absolute paths (C:\\)", () => {
+				expect(isFullyQualifiedWindowsPath("C:\\Users\\foo")).toBe(true);
+			});
+
+			it("should detect drive-letter absolute paths (C:/)", () => {
+				expect(isFullyQualifiedWindowsPath("C:/Users/foo")).toBe(true);
+			});
+
+			it("should reject drive-relative paths (C:foo)", () => {
+				// C:foo is drive-relative, NOT fully-qualified absolute
+				expect(isFullyQualifiedWindowsPath("C:foo")).toBe(false);
+			});
+
+			it("should detect UNC paths", () => {
+				expect(isFullyQualifiedWindowsPath("\\\\server\\share\\x")).toBe(true);
+			});
+
+			it("should detect device paths (\\?...)", () => {
+				expect(isFullyQualifiedWindowsPath("\\\\?\\C:\\very\\long\\x")).toBe(true);
+			});
+
+			it("should detect device paths (\\....)", () => {
+				expect(isFullyQualifiedWindowsPath("\\\\.\\COM1")).toBe(true);
+			});
+
+			it("should reject POSIX-style absolute paths", () => {
+				expect(isFullyQualifiedWindowsPath("/usr/local/bin")).toBe(false);
+			});
+
+			it("should reject paths without drive letter", () => {
+				expect(isFullyQualifiedWindowsPath("/foo")).toBe(false);
+			});
+
+			it("should reject empty string", () => {
+				expect(isFullyQualifiedWindowsPath("")).toBe(false);
+			});
+
+			it("should detect lowercase drive letter", () => {
+				expect(isFullyQualifiedWindowsPath("d:/path")).toBe(true);
+			});
+		});
+
+		describe("integration: normalizeWindowsDrivePath + isFullyQualifiedWindowsPath", () => {
+			it.skipIf(process.platform !== "win32")("should handle the cross-drive fix scenario: /C:/Users/... → fully qualified C:/...", () => {
+				const input = "/C:/Users/alice/.pi/skills/foo";
+				const normalized = normalizeWindowsDrivePath(input);
+				expect(isFullyQualifiedWindowsPath(normalized)).toBe(true);
+				expect(normalized).toBe("C:/Users/alice/.pi/skills/foo");
+			});
+
+			it.skipIf(process.platform !== "win32")("should treat /a/b as fully qualified after MSYS normalization", () => {
+				const input = "/a/b";
+				const normalized = normalizeWindowsDrivePath(input);
+				expect(normalized).toBe("A:\\b");
+				expect(isFullyQualifiedWindowsPath(normalized)).toBe(true);
+			});
+
+			it("should treat C:/... as fully qualified without normalization", () => {
+				expect(isFullyQualifiedWindowsPath("C:/Users/x")).toBe(true);
+			});
+
+			it("should treat C:... as fully qualified without normalization", () => {
+				expect(isFullyQualifiedWindowsPath("C:\\Users\\x")).toBe(true);
+			});
 		});
 	});
 

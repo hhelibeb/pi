@@ -3,6 +3,7 @@ import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "path";
 import { CONFIG_DIR_NAME } from "../config.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
+import { normalizeWindowsDrivePath } from "../utils/paths.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 
 /**
@@ -186,7 +187,7 @@ export interface LoadPromptTemplatesOptions {
 }
 
 function normalizePath(input: string): string {
-	const trimmed = input.trim();
+	const trimmed = normalizeWindowsDrivePath(input.trim());
 	if (trimmed === "~") return homedir();
 	if (trimmed.startsWith("~/")) return join(homedir(), trimmed.slice(2));
 	if (trimmed.startsWith("~")) return join(homedir(), trimmed.slice(1));

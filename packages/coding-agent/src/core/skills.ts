@@ -4,7 +4,7 @@ import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
-import { canonicalizePath } from "../utils/paths.ts";
+import { canonicalizePath, normalizeWindowsDrivePath } from "../utils/paths.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 
@@ -382,7 +382,7 @@ export interface LoadSkillsOptions {
 }
 
 function normalizePath(input: string): string {
-	const trimmed = input.trim();
+	const trimmed = normalizeWindowsDrivePath(input.trim());
 	if (trimmed === "~") return homedir();
 	if (trimmed.startsWith("~/")) return join(homedir(), trimmed.slice(2));
 	if (trimmed.startsWith("~")) return join(homedir(), trimmed.slice(1));

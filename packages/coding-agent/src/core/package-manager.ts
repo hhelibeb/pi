@@ -30,7 +30,7 @@ import { minimatch } from "minimatch";
 import { CONFIG_DIR_NAME } from "../config.ts";
 import { spawnProcess, spawnProcessSync } from "../utils/child-process.ts";
 import { type GitSource, parseGitUrl } from "../utils/git.ts";
-import { canonicalizePath, isLocalPath, markPathIgnoredByCloudSync } from "../utils/paths.ts";
+import { canonicalizePath, isLocalPath, markPathIgnoredByCloudSync, normalizeWindowsDrivePath } from "../utils/paths.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
 import type { PackageSource, SettingsManager } from "./settings-manager.ts";
 
@@ -203,7 +203,7 @@ function toPosixPath(p: string): string {
 }
 
 function getHomeDir(): string {
-	return process.env.HOME || homedir();
+	return normalizeWindowsDrivePath(process.env.HOME || homedir());
 }
 
 function prefixIgnorePattern(line: string, prefix: string): string | null {
@@ -1947,7 +1947,7 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	private resolvePath(input: string): string {
-		const trimmed = input.trim();
+		const trimmed = normalizeWindowsDrivePath(input.trim());
 		if (trimmed === "~") return getHomeDir();
 		if (trimmed.startsWith("~/")) return join(getHomeDir(), trimmed.slice(2));
 		if (trimmed.startsWith("~")) return join(getHomeDir(), trimmed.slice(1));
@@ -1955,7 +1955,7 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	private resolvePathFromBase(input: string, baseDir: string): string {
-		const trimmed = input.trim();
+		const trimmed = normalizeWindowsDrivePath(input.trim());
 		if (trimmed === "~") return getHomeDir();
 		if (trimmed.startsWith("~/")) return join(getHomeDir(), trimmed.slice(2));
 		if (trimmed.startsWith("~")) return join(getHomeDir(), trimmed.slice(1));
